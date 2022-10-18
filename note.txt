@@ -1,0 +1,4 @@
+python save_model.py --weights ./data/carno.weights --output ./checkpoints/carno-416 --input_size 416 --model yolov4 
+
+
+python detect.py --weights ./checkpoints/carno-416 --size 416 --model yolov4 --images ./data/images/car1.jpg

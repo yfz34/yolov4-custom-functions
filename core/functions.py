@@ -64,20 +64,85 @@ def ocr(img, data):
     class_names = read_class_names(cfg.YOLO.CLASSES)
     for i in range(num_objects):
         # get class name for detection
+
+        
         class_index = int(classes[i])
         class_name = class_names[class_index]
         # separate coordinates from box
         xmin, ymin, xmax, ymax = boxes[i]
         # get the subimage that makes up the bounded region and take an additional 5 pixels on each side
-        box = img[int(ymin)-5:int(ymax)+5, int(xmin)-5:int(xmax)+5]
+        box = img[int(ymin)+30:int(ymax)-15, int(xmin)+30:int(xmax)-30]
+
+
+        cv2.imshow("original image", box)
+
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
         # grayscale region within bounding box
         gray = cv2.cvtColor(box, cv2.COLOR_RGB2GRAY)
+
+        cv2.imshow("greyed image", box)
+
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+
+        # 柔和
+        filter = cv2.bilateralFilter(gray, 10, 90, 90)
+        cv2.imshow("smoothened image", gray)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+
+
+
         # threshold the image using Otsus method to preprocess for tesseract
-        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        thresh = cv2.threshold(filter, 122, 255, cv2.THRESH_BINARY_INV)[1]
+
+       
+
+        # select the text
+        (rows, cols) = thresh.shape
+        h_projection = np.array([x / rows for x in thresh.sum(axis=0)])
+        threshold = (np.max(h_projection) - np.min(h_projection)) / 10
+        print("we will use threshold {} for horizontal".format(threshold))
+
+        # select the black areas 水平
+        black_areas = np.where(h_projection < threshold)
+        for j in black_areas:
+            thresh[:, j] = 0
+
+
+        v_projection = np.array([x / cols for x in thresh.sum(axis=1)])
+        threshold = (np.max(v_projection) - np.min(v_projection)) / 4
+        print("we will use threshold {} for vertical".format(threshold))
+
+        black_areas = np.where(v_projection < threshold)
+        # select the black areas 垂直
+        for j in black_areas:
+            thresh[j, :] = 0
+        
+        cv2.imshow("Top 30 contours", thresh)
+
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+
+
+
+
+
         # perform a median blur to smooth image slightly
         blur = cv2.medianBlur(thresh, 3)
+
+        cv2.imshow("Top 30 contours", thresh)
+
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
         # resize image to double the original size as tesseract does better with certain text size
-        blur = cv2.resize(blur, None, fx = 2, fy = 2, interpolation = cv2.INTER_CUBIC)
+        # blur = cv2.resize(blur, None, fx = 2, fy = 2, interpolation = cv2.INTER_CUBIC)
         # run tesseract and convert image text to string
         try:
             text = pytesseract.image_to_string(blur, config='--psm 11 --oem 3')
