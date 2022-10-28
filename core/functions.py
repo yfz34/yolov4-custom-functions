@@ -1,4 +1,5 @@
 import os
+import re
 import cv2
 import random
 import numpy as np
@@ -6,12 +7,27 @@ import tensorflow as tf
 import pytesseract
 from core.utils import read_class_names
 from core.config import cfg
+import imutils
+from PIL import Image
+from datetime import datetime
+from itertools import combinations
+import math
+
+
+
+
+
+
 
 # function to count objects, can return total classes or count per class
-def count_objects(data, by_class = False, allowed_classes = list(read_class_names(cfg.YOLO.CLASSES).values())):
+def count_objects(
+    data,
+    by_class=False,
+    allowed_classes=list(read_class_names(cfg.YOLO.CLASSES).values()),
+):
     boxes, scores, classes, num_objects = data
 
-    #create dictionary to hold count of objects
+    # create dictionary to hold count of objects
     counts = dict()
 
     # if by_class = True then count objects per class
@@ -30,15 +46,16 @@ def count_objects(data, by_class = False, allowed_classes = list(read_class_name
 
     # else count total objects found
     else:
-        counts['total object'] = num_objects
-    
+        counts["total object"] = num_objects
+
     return counts
+
 
 # function for cropping each detection and saving as new image
 def crop_objects(img, data, path, allowed_classes):
     boxes, scores, classes, num_objects = data
     class_names = read_class_names(cfg.YOLO.CLASSES)
-    #create dictionary to hold count of objects for image name
+    # create dictionary to hold count of objects for image name
     counts = dict()
     for i in range(num_objects):
         # get count of class for part of image name
@@ -49,58 +66,51 @@ def crop_objects(img, data, path, allowed_classes):
             # get box coords
             xmin, ymin, xmax, ymax = boxes[i]
             # crop detection from image (take an additional 5 pixels around all edges)
-            cropped_img = img[int(ymin)-5:int(ymax)+5, int(xmin)-5:int(xmax)+5]
+            cropped_img = img[
+                int(ymin) - 5 : int(ymax) + 5, int(xmin) - 5 : int(xmax) + 5
+            ]
             # construct image name and join it to path for saving crop properly
-            img_name = class_name + '_' + str(counts[class_name]) + '.png'
-            img_path = os.path.join(path, img_name )
+            img_name = class_name + "_" + str(counts[class_name]) + ".png"
+            img_path = os.path.join(path, img_name)
             # save image
             cv2.imwrite(img_path, cropped_img)
         else:
             continue
-        
-# function to run general Tesseract OCR on any detections 
+
+
+# function to run general Tesseract OCR on any detections
 def ocr(img, data):
     boxes, scores, classes, num_objects = data
     class_names = read_class_names(cfg.YOLO.CLASSES)
     for i in range(num_objects):
         # get class name for detection
 
-        
         class_index = int(classes[i])
         class_name = class_names[class_index]
         # separate coordinates from box
         xmin, ymin, xmax, ymax = boxes[i]
         # get the subimage that makes up the bounded region and take an additional 5 pixels on each side
-        box = img[int(ymin)+30:int(ymax)-15, int(xmin)+30:int(xmax)-30]
+        box = img[int(ymin) + 5 : int(ymax) + 5, int(xmin) + 5 : int(xmax) + 5]
 
-
-        cv2.imshow("original image", box)
-
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        img1 = imutils.resize(box, width=300)        
         # grayscale region within bounding box
-        gray = cv2.cvtColor(box, cv2.COLOR_RGB2GRAY)
+        gray = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
 
-        cv2.imshow("greyed image", box)
+        # cv2.imshow("greyed image", box)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
 
         # 柔和
         filter = cv2.bilateralFilter(gray, 10, 90, 90)
-        cv2.imshow("smoothened image", gray)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
-
-
-
-        # threshold the image using Otsus method to preprocess for tesseract
+        # cv2.imshow("smoothened image", gray)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
+        #二直化
         thresh = cv2.threshold(filter, 122, 255, cv2.THRESH_BINARY_INV)[1]
 
-       
 
         # select the text
         (rows, cols) = thresh.shape
@@ -113,7 +123,6 @@ def ocr(img, data):
         for j in black_areas:
             thresh[:, j] = 0
 
-
         v_projection = np.array([x / cols for x in thresh.sum(axis=1)])
         threshold = (np.max(v_projection) - np.min(v_projection)) / 4
         print("we will use threshold {} for vertical".format(threshold))
@@ -122,30 +131,30 @@ def ocr(img, data):
         # select the black areas 垂直
         for j in black_areas:
             thresh[j, :] = 0
-        
-        cv2.imshow("Top 30 contours", thresh)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.imshow("Top 30 contours", thresh)
 
-
-
-
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
 
         # perform a median blur to smooth image slightly
         blur = cv2.medianBlur(thresh, 3)
+        # cv2.imshow("Top 30 contours", blur)
 
-        cv2.imshow("Top 30 contours", thresh)
-
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        RGBimage = cv2.cvtColor(blur, cv2.COLOR_BGR2RGB)
+        PILimage = Image.fromarray(RGBimage)
+        PILimage.save(f"./pre_img/{str(datetime.now())}.png", dpi=(300, 300))
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
         # resize image to double the original size as tesseract does better with certain text size
         # blur = cv2.resize(blur, None, fx = 2, fy = 2, interpolation = cv2.INTER_CUBIC)
         # run tesseract and convert image text to string
         try:
-            text = pytesseract.image_to_string(blur, config='--psm 11 --oem 3')
+            text = pytesseract.image_to_string(blur, config="--psm 11 --oem 3")
             print("Class: {}, Text Extracted: {}".format(class_name, text))
-        except: 
+        except:
             text = None
+
+    

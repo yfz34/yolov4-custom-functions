@@ -1,4 +1,14 @@
 python save_model.py --weights ./data/carno.weights --output ./checkpoints/carno-416 --input_size 416 --model yolov4 
 
+python save_model.py --weights ./data/carno.weights --output ./checkpoints/carno-416 --input_size 416 --model yolov4 --tiny
+
 
 python detect.py --weights ./checkpoints/carno-416 --size 416 --model yolov4 --images ./data/images/car1.jpg
+
+
+cv
+https://chtseng.wordpress.com/2016/12/05/opencv-contour%E8%BC%AA%E5%BB%93/
+
+https://stackoverflow.com/questions/64410486/draw-contours-around-images-of-the-same-color-with-opencv-python
+
+https://stackoverflow.com/questions/62295185/warping-a-license-plate-image-to-be-frontal-parallel
