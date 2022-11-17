@@ -6,7 +6,8 @@ import tensorflow as tf
 import pytesseract
 from core.config import cfg
 import re
-
+from PIL import Image
+from datetime import datetime
 # If you don't have tesseract executable in your PATH, include the following:
 # pytesseract.pytesseract.tesseract_cmd = r'<full_path_to_your_tesseract_executable>'
 # Example tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract'
@@ -29,8 +30,9 @@ def recognize_plate(img, coords):
     ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU | cv2.THRESH_BINARY_INV)
     # cv2.imshow("Otsu Threshold", thresh)
     # cv2.waitKey(0)
+
     # create rectangular kernel for dilation
-    rect_kern = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    rect_kern = cv2.getStructuringElement(cv2.MORPH_RECT, (4, 5))
     # apply dilation to make regions more clear
     dilation = cv2.dilate(thresh, rect_kern, iterations=1)
     # cv2.imshow("Dilation", dilation)
@@ -55,40 +57,57 @@ def recognize_plate(img, coords):
         x, y, w, h = cv2.boundingRect(cnt)
         height, width = im2.shape
         # if height of box is not tall enough relative to total height then skip
+        # print(height / float(h))
+        # print("h", height / float(h) > 6)
         if height / float(h) > 6:
             continue
 
         ratio = h / float(w)
+        # print(ratio)
+        # print("r", ratio < 1.45)
         # if height to width ratio is less than 1.5 skip
-        if ratio < 1.5:
+        if ratio < 1.45:
             continue
 
         # if width is not wide enough relative to total width then skip
+        # print(width / float(w))
+        # print("w", width / float(w) > 15)
         if width / float(w) > 15:
             continue
 
         area = h * w
         # if area is less than 100 pixels skip
+
+        # print(area)
+        # print("a", area < 100)
         if area < 100:
             continue
 
         # draw the rectangle
         rect = cv2.rectangle(im2, (x, y), (x + w, y + h), (0, 255, 0), 2)
         # grab character region of image
-        roi = thresh[y - 5 : y + h + 5, x - 5 : x + w + 5]
+        roi = thresh[y - 5 : y + h + 5, x : x + w]
         # perfrom bitwise not to flip image to black text on white background
         roi = cv2.bitwise_not(roi)
         # perform another blur on character region
         roi = cv2.medianBlur(roi, 5)
+
         try:
+            # cv2.imshow(f"{plate_num}", roi)
+            # cv2.waitKey(0)
+            RGBimage = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+            PILimage = Image.fromarray(RGBimage)
+            # PILimage.save(f"./pre_img/{str(datetime.now())}.png", quality=95)
             text = pytesseract.image_to_string(
                 roi,
-                config="-c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 8 --oem 3",
+                config="-c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 7 --oem 3",
             )
             # clean tesseract text by removing any unwanted blank spaces
             clean_text = re.sub("[\W_]+", "", text)
             plate_num += clean_text
-        except:
+        except Exception as ex:
+            print(ex)
+            print(ex.__traceback__.tb_lineno)
             text = None
     if plate_num != None:
         print("License Plate #: ", plate_num)
