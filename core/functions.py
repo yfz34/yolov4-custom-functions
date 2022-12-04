@@ -13,6 +13,13 @@ from datetime import datetime
 from itertools import combinations
 import math
 
+gray_pre_output = "./temp/graypre/"
+edged_pre_output = "./temp/edgedpre/"
+warp_output = "./temp/warp/"
+smoothened_output = "./temp/smoothened/"
+thresh_output = "./temp/thresh/"
+erosion_output = "./temp/erosion/"
+blur_output = "./temp/blur/"
 
 def order_points(pts):
 
@@ -122,7 +129,7 @@ def crop_objects(img, data, path, allowed_classes):
 
 
 # function to run general Tesseract OCR on any detections
-def ocr(img, data):
+def ocr(img, data, image_name):
     boxes, scores, classes, num_objects = data
     class_names = read_class_names(cfg.YOLO.CLASSES)
     for i in range(num_objects):
@@ -149,21 +156,23 @@ def ocr(img, data):
         # grayscale region within bounding box
         gray_pre = cv2.cvtColor(box, cv2.COLOR_RGB2GRAY)
         gray_pre = cv2.GaussianBlur(gray_pre, (5, 5), 0)
-        cv2.imshow("greyed image", gray_pre)
+        cv2.imwrite(gray_pre_output + image_name + ".png", gray_pre)
+        # cv2.imshow("greyed image", gray_pre)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
         edged_pre = cv2.Canny(gray_pre, 30, 200)
         # thresh_pre= cv2.adaptiveThreshold(edged_pre,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,11,2)
 
         # thresh = cv2.threshold(filter, 122, 255, cv2.THRESH_BINARY_INV)[1]
 
-        cv2.imshow("grey image", edged_pre)
+        cv2.imwrite(edged_pre_output + image_name + ".png", edged_pre)
+        # cv2.imshow("grey image", edged_pre)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
 
         contours = cv2.findContours(
             edged_pre.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
@@ -197,11 +206,12 @@ def ocr(img, data):
 
         warp = point_transform(orgi, cnt)
 
-        cv2.imshow("warp image", warp)
+        cv2.imwrite(warp_output + image_name + ".png", warp)
+        # cv2.imshow("warp image", warp)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
        
         # 柔和
         new_warp = imutils.resize(warp, width=300)
@@ -211,17 +221,19 @@ def ocr(img, data):
 
         
 
-        cv2.imshow("smoothened image", filter)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        cv2.imwrite(smoothened_output + image_name + ".png", filter)
+        # cv2.imshow("smoothened image", filter)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
         # 二直化
         thresh = cv2.threshold(filter, 122, 255, cv2.THRESH_BINARY_INV)[1]
 
-        cv2.imshow("smoothened image", thresh)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        cv2.imwrite(thresh_output + image_name + ".png", thresh)
+        # cv2.imshow("smoothened image", thresh)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
         # select the text
         print(thresh)
         (rows, cols) = thresh.shape
@@ -246,11 +258,12 @@ def ocr(img, data):
 
         kernel = np.ones((2,3),np.uint8)
         erosion = cv2.erode(thresh,kernel,iterations=1)
-        cv2.imshow("Top 30 contours", erosion)
+        cv2.imwrite(erosion_output + image_name + ".png", erosion)
+        # cv2.imshow("Top 30 contours", erosion)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
 
         # perform a median blur to smooth image slightly
         blur = cv2.medianBlur(erosion, 3)
@@ -260,10 +273,11 @@ def ocr(img, data):
         # PILimage = Image.fromarray(RGBimage)
         # PILimage.save(f"./pre_img/{str(datetime.now())}.png", dpi=(300, 300))
         
-        cv2.imshow("Top 30 contours",blur )
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        cv2.imwrite(blur_output + image_name + ".png", blur)
+        # cv2.imshow("Top 30 blur",blur )
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
         # resize image to double the original size as tesseract does better with certain text size
         # blur = cv2.resize(blur, None, fx = 2, fy = 2, interpolation = cv2.INTER_CUBIC)
         # run tesseract and convert image text to string
@@ -274,5 +288,8 @@ def ocr(img, data):
                 config="-c tessedit_char_whitelist=-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 11 --oem 3",
             )
             print("Class: {}, Text Extracted: {}".format(class_name, text))
-        except:
-            text = None
+            return text
+        except Exception as e:
+            print(e)
+            print(e.__traceback__.tb_lineno)
+            return ""

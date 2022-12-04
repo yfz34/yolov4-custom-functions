@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    
+    <!-- awesome icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+    <style>
+      [v-cloak] {
+        display: none;
+      }
+
+      .table th,
+      .table td {
+        vertical-align: middle;
+      }
+
+      td:nth-child(1) {
+        width: 35%;
+      }
+      td:nth-child(2) {
+        width: 10%;
+      }
+      td:nth-child(3) {
+        width: 35%;
+      }
+      td:nth-child(4) {
+        width: 10%;
+      }
+      td:nth-child(5) {
+        width: 20%;
+      }
+
+      img {
+        width: 100%;
+      }
+    </style>
+
+    <title>車牌辨識</title>
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <div class="text-center">
+        <h1>車牌辨識</h1>
+  
+        <div style="display: flex; justify-content: center; gap: 20px; padding-bottom: 20px;">
+          <div>
+            <label class="btn btn-primary" id="upload-label" for="formFile" style="display: flex;">
+              <input style="display:none;" id="formFile" type="file" accept="image/*" multiple @change="fileChange" />
+              選擇圖片
+            </label>
+          </div>
+          <div>
+            <button type="button" class="btn btn-danger" @click="removeAll()">清除所有</button>
+          </div>
+        </div>
+      
+        <div class="p-5">
+          <table class="table table-bordered">
+            <thead>
+              <tr>
+                <th scope="col">原始照片</th>
+                <th scope="col">辨識</th>
+                <th scope="col">辨識結果</th>
+                <th scope="col">車牌號碼</th>
+                <th scope="col">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in rows" :key="row.id">
+                <td>
+                  <div class="p-2">
+                    <img :src="row.orgPicUrl" />
+                  </div>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-success" @click="handleUpload(row)" :disabled="row.loading" v-text="row.loading ? '辨識中' : '辨識'"></button>
+                </td>
+                <td>
+                  <div class="p-2" v-if="row.error">
+                    <p>辨識失敗</p>
+                  </div>
+                  <div class="p-2" v-else>
+                    <div class="p-2" v-if="row.resPicUrl !== ''">
+                      <img :src="row.resPicUrl" />
+                    </div>
+                  </div>
+                </td>
+                <td><p v-text="row.licensePlate"></p></td>
+                <td>
+                  <button class="btn btn-info"  data-bs-toggle="modal" data-bs-target="#detailModal" @click="showDetail(row.detailId)"><i class="fa fa-search"></i></button>
+                  <button class="btn btn-danger" @click="remove(row.id)"><i class="fa fa-trash"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal -->
+      <div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="detailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="detailModalLabel">詳細資料</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table table-bordered">
+                <thead>
+                  <tr>
+                    <th scope="col">名稱</th>
+                    <th scope="col">圖片</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(detail, index) in details" :key="index">
+                    <td style="width: 50%;">
+                      <p v-text="detail.name"></p>
+                    </td>
+                    <td style="width: 50%;">
+                      <div class="p-2">
+                        <img :src="detail.url" />
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script> -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <!-- <script src="{{ url_for('static', path='js/main.js') }}" type="text/javascript"></script> -->
+
+    <script>
+      const detailModal = new bootstrap.Modal(document.getElementById("detailModal"), {});
+
+      const UPLOAD_URL = "/upload"
+      const DETAIL_URL = "/detail"
+
+      const uploadFileApi = (form_data) => axios.post(UPLOAD_URL, form_data)
+      const getDetailApi = (id) => axios.get(DETAIL_URL + "/" + id)
+
+      // convert file to a base64 url
+      const fileToBase64 = file => {
+        return new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = e => res(e.target.result);
+          reader.onerror = e => rej(e);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const { createApp } = Vue
+
+      const app = createApp({
+        data() {
+          return {
+            rows: [],
+            details: [],
+          }
+        },
+        methods:{
+          async fileChange(event) {
+            const files = event.target.files
+            for (let index = 0; index < files.length; index++) {
+              const file = files[index];
+              const fileBase64 = await fileToBase64(file)
+              this.rows.push({
+                id: Date.now().toString(),
+                file: file,
+                orgPicUrl: fileBase64,
+                resPicUrl: '',
+                loading: false,
+                licensePlate: "",
+                error: false,
+                detailId: "",
+              })
+            }
+          },
+          removeAll() {
+            this.rows = []
+          },
+          remove(id) {
+            const index = this.rows.findIndex(row => row.id === id)
+            this.rows.splice(index, 1)
+          },
+          handleUpload(row) {
+            let vm = this
+
+            row.loading = true
+
+            const form_data = new FormData()
+            form_data.append("file", row.file)
+
+            uploadFileApi(form_data)
+              .then((res) => {
+                console.log(res)
+                row.resPicUrl = res.data.detectFileUrl
+                row.loading = false
+                row.licensePlate = res.data.licensePlate
+                row.detailId = res.data.id
+              })
+              .catch((error) => {
+                console.log(error)
+                row.error = true
+              })
+          },
+          showDetail(detailId) {
+            let vm = this
+
+            getDetailApi(detailId)
+              .then(res => {
+                console.log(res.data)
+                vm.details = res.data
+              })
+              .catch(err => {
+                console.log(err)
+              })
+          }
+        }
+      })
+
+      app.mount('#app')
+    </script>
+  </body>
+</html>
